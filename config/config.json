@@ -1,0 +1,6 @@
+{
+    "threshold": 5,
+    "log_path": "/var/log/auth.log",
+    "db_path": "data/ids.db",
+    "blocked_ips_file": "data/blocked_ips.txt"
+}

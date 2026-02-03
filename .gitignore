@@ -1,5 +1,10 @@
 __pycache__/
 *.pyc
-ids.db
-.env
-
+*.db
+*.log
+data/*.txt
+logs/*.log
+.venv/
+venv/
+*.swp
+.DS_Store
