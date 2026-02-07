@@ -1,21 +1,24 @@
 import subprocess
 import os
 from datetime import datetime
+from custom_structures import CustomLinkedList
 
 class Blocker:
     """
     Handles IP blocking using iptables (Linux firewall).
-    Maintains persistent record of blocked IPs.
+    Uses custom linked list for maintaining blocked IPs.
     """
     
     def __init__(self, blocked_ips_file='data/blocked_ips.txt'):
         """
-        Initialize blocker.
+        Initialize blocker with custom linked list.
         
         Args:
             blocked_ips_file (str): Path to file storing blocked IPs
         """
         self.blocked_ips_file = blocked_ips_file
+        # Using custom linked list instead of Python list
+        self.blocked_ips_list = CustomLinkedList()
         
         # Ensure data directory exists
         os.makedirs(os.path.dirname(blocked_ips_file), exist_ok=True)
@@ -24,10 +27,26 @@ class Blocker:
         if not os.path.exists(blocked_ips_file):
             with open(blocked_ips_file, 'w') as f:
                 f.write(f"# Blocked IPs - Started {datetime.now()}\n")
+        
+        # Load existing blocked IPs into custom linked list
+        self._load_blocked_ips()
+    
+    def _load_blocked_ips(self):
+        """Load existing blocked IPs into custom linked list."""
+        try:
+            with open(self.blocked_ips_file, 'r') as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith('#'):
+                        ip = line.split('|')[0].strip()
+                        self.blocked_ips_list.append(ip)
+        except FileNotFoundError:
+            pass
     
     def block_ip(self, ip):
         """
         Block IP address using iptables.
+        Updates custom linked list.
         
         Args:
             ip (str): IP address to block
@@ -36,8 +55,8 @@ class Blocker:
             bool: True if successful, False otherwise
         """
         try:
-            # Check if already blocked
-            if self._is_blocked(ip):
+            # Check if already blocked using custom linked list
+            if self.blocked_ips_list.search(ip):
                 print(f"[INFO] IP {ip} is already blocked")
                 return True
             
@@ -46,6 +65,8 @@ class Blocker:
             result = subprocess.run(cmd, capture_output=True, text=True)
             
             if result.returncode == 0:
+                # Add to custom linked list
+                self.blocked_ips_list.append(ip)
                 # Save to file
                 self._save_to_file(ip)
                 print(f"[SUCCESS] Blocked IP: {ip}")
@@ -61,19 +82,6 @@ class Blocker:
             print(f"[ERROR] Unexpected error: {e}")
             return False
     
-    def _is_blocked(self, ip):
-        """
-        Check if IP is already blocked.
-        
-        Args:
-            ip (str): IP address
-        
-        Returns:
-            bool: True if blocked, False otherwise
-        """
-        blocked_ips = self.get_blocked_ips()
-        return ip in blocked_ips
-    
     def _save_to_file(self, ip):
         """
         Save blocked IP to persistent file.
@@ -87,27 +95,29 @@ class Blocker:
     
     def get_blocked_ips(self):
         """
-        Read list of blocked IPs from file.
+        Get list of blocked IPs from custom linked list.
         
         Returns:
             list: List of blocked IP addresses
         """
-        try:
-            with open(self.blocked_ips_file, 'r') as f:
-                ips = []
-                for line in f:
-                    line = line.strip()
-                    if line and not line.startswith('#'):
-                        # Extract IP (first part before |)
-                        ip = line.split('|')[0].strip()
-                        ips.append(ip)
-                return ips
-        except FileNotFoundError:
-            return []
+        return self.blocked_ips_list.to_list()
+    
+    def is_blocked(self, ip):
+        """
+        Check if IP is blocked using custom linked list.
+        
+        Args:
+            ip (str): IP address
+        
+        Returns:
+            bool: True if blocked, False otherwise
+        """
+        return self.blocked_ips_list.search(ip)
     
     def unblock_ip(self, ip):
         """
-        Unblock an IP address (for testing/management).
+        Unblock an IP address.
+        Removes from custom linked list.
         
         Args:
             ip (str): IP address to unblock
@@ -120,6 +130,8 @@ class Blocker:
             result = subprocess.run(cmd, capture_output=True, text=True)
             
             if result.returncode == 0:
+                # Remove from custom linked list
+                self.blocked_ips_list.remove(ip)
                 print(f"[SUCCESS] Unblocked IP: {ip}")
                 return True
             else:
@@ -129,6 +141,10 @@ class Blocker:
         except Exception as e:
             print(f"[ERROR] {e}")
             return False
+    
+    def get_blocked_count(self):
+        """Get number of blocked IPs using custom linked list."""
+        return len(self.blocked_ips_list)
     
     def list_iptables_rules(self):
         """
@@ -147,18 +163,16 @@ class Blocker:
         except Exception as e:
             return f"Error: {e}"
 
-# Test the blocker (BE CAREFUL!)
+# Test the blocker
 if __name__ == "__main__":
     blocker = Blocker()
     
-    print("Testing Blocker...")
-    print("\nCurrent blocked IPs:")
-    blocked = blocker.get_blocked_ips()
-    print(blocked if blocked else "None")
+    print("Testing Blocker with Custom Linked List...")
+    print(f"\nCurrent blocked IPs: {blocker.get_blocked_ips()}")
+    print(f"Total blocked: {blocker.get_blocked_count()}")
     
-    # WARNING: Only uncomment if you want to test actual blocking
-    # test_ip = '192.168.99.99'
-    # blocker.block_ip(test_ip)
-    # blocker.unblock_ip(test_ip)
+    # Test search
+    test_ip = '192.168.1.100'
+    print(f"\nIs {test_ip} blocked? {blocker.is_blocked(test_ip)}")
     
-    print("\nBlocker initialized successfully!")
+    print("\n✓ Blocker with custom linked list working!")
