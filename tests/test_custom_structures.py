@@ -4,7 +4,10 @@ Unit tests for custom data structures.
 
 import unittest
 import sys
-sys.path.insert(0, '../src')
+import os
+
+# Add src directory to path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 from custom_structures import CustomLinkedList, CustomHashTable, CustomQueue
 
@@ -73,7 +76,7 @@ class TestCustomHashTable(unittest.TestCase):
         self.ht.insert("192.168.1.1", 5)
         self.ht.insert("192.168.1.1", 10)
         self.assertEqual(self.ht.get("192.168.1.1"), 10)
-        self.assertEqual(len(self.ht), 1)  # Should not increase count
+        self.assertEqual(len(self.ht), 1)
     
     def test_contains(self):
         """Test contains method."""
@@ -104,11 +107,9 @@ class TestCustomHashTable(unittest.TestCase):
     
     def test_collision_handling(self):
         """Test hash collision handling."""
-        # Insert multiple items that might collide
         for i in range(20):
             self.ht.insert(f"ip{i}", i)
         
-        # All should be retrievable
         for i in range(20):
             self.assertEqual(self.ht.get(f"ip{i}"), i)
 
@@ -134,7 +135,7 @@ class TestCustomQueue(unittest.TestCase):
         self.q.enqueue("log2")
         
         self.assertEqual(self.q.peek(), "log1")
-        self.assertEqual(len(self.q), 2)  # Should not remove
+        self.assertEqual(len(self.q), 2)
     
     def test_is_empty(self):
         """Test empty check."""

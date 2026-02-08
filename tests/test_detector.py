@@ -4,7 +4,10 @@ Unit tests for Detector module.
 
 import unittest
 import sys
-sys.path.insert(0, '../src')
+import os
+
+# Add src directory to path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 from detector import Detector
 
@@ -60,23 +63,22 @@ class TestDetector(unittest.TestCase):
         }
         
         threats = self.detector.detect_threats(failed_attempts)
-        self.assertEqual(len(threats), 3)  # Only 3 above threshold
+        self.assertEqual(len(threats), 3)
     
     def test_custom_hash_table_integration(self):
         """Test custom hash table usage."""
         failed_attempts = {'192.168.1.100': 7}
         self.detector.detect_threats(failed_attempts)
         
-        # Should be stored in custom hash table
         attempts = self.detector.get_ip_attempts('192.168.1.100')
         self.assertEqual(attempts, 7)
     
     def test_threat_summary(self):
         """Test threat summary statistics."""
         failed_attempts = {
-            '192.168.1.100': 7,   # MEDIUM
-            '192.168.1.101': 15,  # HIGH
-            '10.0.0.50': 25       # CRITICAL
+            '192.168.1.100': 7,
+            '192.168.1.101': 15,
+            '10.0.0.50': 25
         }
         
         self.detector.detect_threats(failed_attempts)
@@ -92,7 +94,7 @@ class TestDetector(unittest.TestCase):
         failed_attempts = {'192.168.1.100': 5}
         threats = self.detector.detect_threats(failed_attempts)
         
-        self.assertEqual(len(threats), 1)  # Should trigger at threshold
+        self.assertEqual(len(threats), 1)
 
 
 if __name__ == '__main__':

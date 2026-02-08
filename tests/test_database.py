@@ -5,7 +5,9 @@ Unit tests for Database module.
 import unittest
 import sys
 import os
-sys.path.insert(0, '../src')
+
+# Add src directory to path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 from database import Database
 
@@ -47,7 +49,6 @@ class TestDatabase(unittest.TestCase):
         self.db.mark_as_blocked('192.168.1.100')
         
         threats = self.db.get_all_threats()
-        # Check if blocked flag is set (threats[0][5] is blocked field)
         self.assertEqual(threats[0][5], 1)
     
     def test_save_blocked_ip(self):
@@ -64,12 +65,11 @@ class TestDatabase(unittest.TestCase):
         self.db.save_blocked_ip('192.168.1.100', 'Duplicate')
         
         blocked = self.db.get_blocked_ips()
-        self.assertEqual(len(blocked), 1)  # Should not duplicate
+        self.assertEqual(len(blocked), 1)
     
     def test_log_activity(self):
         """Test activity logging."""
         self.db.log_activity('TEST', 'Test message')
-        # If no exception, test passes
         self.assertTrue(True)
     
     def test_get_statistics(self):
