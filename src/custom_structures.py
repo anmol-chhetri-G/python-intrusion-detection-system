@@ -131,21 +131,19 @@ class CustomHashTable:
         """
         Insert key-value pair.
         Time Complexity: O(1) average case
-        
+
         Args:
             key: Key to insert
             value: Value to store
         """
         index = self._hash_function(key)
         bucket = self.table[index]
-        
-        # Update if key exists
+
         for i, (k, v) in enumerate(bucket):
             if k == key:
                 bucket[i] = (key, value)
                 return
-        
-        # Insert new key-value pair
+
         bucket.append((key, value))
         self.count += 1
     
