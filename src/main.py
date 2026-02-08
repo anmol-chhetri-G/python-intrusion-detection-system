@@ -10,7 +10,6 @@ Course: ST5062CEM - Programming and Algorithm 2
 import sys
 import time
 import signal
-import random
 from log_parser import LogParser
 from detector import Detector
 from http_detector import HTTPDetector
@@ -25,7 +24,7 @@ class IDS:
     Supports both SSH and HTTP attack detection.
     """
     
-    def __init__(self, threshold=5, interval=10, enable_http=True, demo_mode=True):
+    def __init__(self, threshold=5, interval=10, enable_http=True):
         """
         Initialize IDS with all components.
         
@@ -33,7 +32,6 @@ class IDS:
             threshold (int): Failed login threshold for detection
             interval (int): Log monitoring interval in seconds
             enable_http (bool): Enable HTTP attack detection
-            demo_mode (bool): Use demo data for demonstration
         """
         print("=" * 60)
         print("  PYTHON INTRUSION DETECTION SYSTEM")
@@ -53,25 +51,19 @@ class IDS:
         self.threshold = threshold
         self.interval = interval
         self.enable_http = enable_http
-        self.demo_mode = demo_mode
         self.running = False
-        self.scan_count = 0
         
         # Log system start
         self.logger.log_system("IDS initialized")
         self.logger.log_system(f"SSH Detection: Enabled (threshold: {threshold})")
         if enable_http:
             self.logger.log_system("HTTP Attack Detection: Enabled")
-        if demo_mode:
-            self.logger.log_system("Demo Mode: Enabled (using simulated attacks)")
         self.logger.log_system(f"Monitoring interval: {interval} seconds")
         
         print("\n✓ All components initialized successfully!")
         print(f"✓ SSH Brute Force Detection: Active")
         if enable_http:
             print(f"✓ HTTP Attack Detection: Active")
-        if demo_mode:
-            print(f"✓ Demo Mode: Active (simulated attacks)")
     
     def start(self):
         """Start the IDS monitoring process."""
@@ -86,7 +78,6 @@ class IDS:
         try:
             while self.running:
                 self.scan_and_respond()
-                self.scan_count += 1
                 time.sleep(self.interval)
         
         except KeyboardInterrupt:
@@ -104,35 +95,12 @@ class IDS:
     
     def _scan_ssh_attacks(self):
         """Scan for SSH brute force attacks."""
+        failed_attempts = self.parser.attempts.copy()
         
-        if self.demo_mode:
-            # Demo mode: Simulate SSH attacks periodically
-            # Show attack every 2-3 scans
-            if self.scan_count % 3 == 0:
-                # Generate demo SSH attack
-                demo_ips = [
-                    ('203.0.113.50', random.randint(6, 12)),
-                    ('45.76.123.45', random.randint(8, 15)),
-                    ('198.51.100.100', random.randint(3, 7)),
-                ]
-                
-                failed_attempts = dict(demo_ips)
-                print(f"[{time.strftime('%H:%M:%S')}] SSH: Detected brute force from {len(failed_attempts)} IP(s)")
-            else:
-                print(f"[{time.strftime('%H:%M:%S')}] SSH: No suspicious activity")
-                return
-        else:
-            # Real mode: Try to read actual logs
-            self.parser.scan_once()
-            failed_attempts = self.parser.attempts.copy()
-            
-            if not failed_attempts:
-                print(f"[{time.strftime('%H:%M:%S')}] SSH: No suspicious activity")
-                return
-            
-            print(f"[{time.strftime('%H:%M:%S')}] SSH: Found activity from {len(failed_attempts)} IP(s)")
+        if not failed_attempts:
+            print(f"[{time.strftime('%H:%M:%S')}] SSH: No suspicious activity")
+            return
         
-        # Detect threats
         threats = self.detector.detect_threats(failed_attempts)
         
         if threats:
@@ -159,7 +127,9 @@ class IDS:
     
     def _scan_http_attacks(self):
         """Scan for HTTP-based attacks."""
-        # Simulate HTTP request monitoring
+        # Simulate HTTP request monitoring (in real system, would read web server logs)
+        # For demo purposes, we'll use sample data
+        
         sample_requests = [
             ("192.168.1.200", "GET /index.php?id=1' OR '1'='1"),
             ("192.168.1.201", "GET /search?q=<script>alert('XSS')</script>"),
@@ -175,6 +145,7 @@ class IDS:
                 print(f"      Threat Level: {attack['threat_level']}")
                 print(f"      Request: {attack['request'][:60]}...")
                 
+                # Log and save
                 self.logger.log_event('HTTP_ATTACK', 
                     f"HTTP attack from {ip}: {', '.join(attack['attack_types'])}")
                 
@@ -190,7 +161,7 @@ class IDS:
     
     def _block_ip(self, ip, reason):
         """Block an IP address."""
-        print(f"      🔒 Blocking IP {ip}...")
+        print(f"🟥  Blocking IP {ip}...")
         
         if self.blocker.block_ip(ip):
             self.db.mark_as_blocked(ip)
@@ -242,33 +213,19 @@ Detects and blocks:
   • HTTP Injection Attacks (SQL, XSS, Command Injection, Path Traversal)
 
 Usage:
-    python3 main.py              # Run in CLI mode (demo mode)
+    python3 main.py              # Run in CLI mode (both SSH + HTTP)
     python3 main.py --gui        # Run in GUI mode
-    python3 main.py --real       # Real mode (read actual logs)
     python3 main.py --ssh-only   # SSH detection only
     python3 main.py --help       # Show this help
 
 Examples:
     python3 main.py
     python3 main.py --gui
-    python3 main.py --real
             """)
             return
         
         elif sys.argv[1] == '--ssh-only':
-            ids = IDS(threshold=5, interval=10, enable_http=False, demo_mode=True)
-            
-            def signal_handler(sig, frame):
-                ids.stop()
-                sys.exit(0)
-            
-            signal.signal(signal.SIGINT, signal_handler)
-            ids.start()
-            return
-        
-        elif sys.argv[1] == '--real':
-            # Real mode - attempt to read actual logs
-            ids = IDS(threshold=5, interval=10, enable_http=True, demo_mode=False)
+            ids = IDS(threshold=5, interval=10, enable_http=False)
             
             def signal_handler(sig, frame):
                 ids.stop()
@@ -278,9 +235,9 @@ Examples:
             ids.start()
             return
     
-    # Default: CLI mode with demo data
+    # Default: CLI mode with both SSH and HTTP detection
     try:
-        ids = IDS(threshold=5, interval=10, enable_http=True, demo_mode=True)
+        ids = IDS(threshold=5, interval=10, enable_http=True)
         
         def signal_handler(sig, frame):
             ids.stop()
@@ -290,7 +247,7 @@ Examples:
         ids.start()
     
     except Exception as e:
-        print(f"\n❌ Error: {e}")
+        print(f"\n== Error==: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)

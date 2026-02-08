@@ -39,13 +39,10 @@ class HTTPDetector:
     ]
     
     COMMAND_INJECTION_PATTERNS = [
-        r";\s*cat\b",
-        r";\s*ls\b",
-        r";\s*rm\b",
-        r"\|\s*cat\b",
-        r"\|\s*ls\b",
-        r"\|\s*rm\b",
-        r"\|\|",
+        r";\s*cat\s+",
+        r";\s*ls\s+",
+        r";\s*rm\s+",
+        r"\|\s*cat\s+",
         r"`.*`",
         r"\$\(.*\)"
     ]
