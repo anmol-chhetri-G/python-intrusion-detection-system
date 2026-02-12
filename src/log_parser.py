@@ -1,8 +1,3 @@
-"""
-Real SSH Log Parser - Reads actual authentication logs
-Requires sudo or proper file permissions
-"""
-
 import re
 import os
 import time
@@ -179,3 +174,4 @@ if __name__ == "__main__":
         print(f"\nCumulative totals:")
         for ip, count in sorted(all_attempts.items(), key=lambda x: x[1], reverse=True):
             print(f"  {ip}: {count} total attempts")
+
