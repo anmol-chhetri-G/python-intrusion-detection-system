@@ -1,291 +1,172 @@
-#!/usr/bin/env python3
 import sys
 import time
 import signal
-import random
 from log_parser import LogParser
 from detector import Detector
-from http_detector import HTTPDetector
 from database import Database
 from file_logger import FileLogger
 from blocker import Blocker
 
 class IDS:
-    """
-    Main IDS controller class.
-    Coordinates all components for threat detection and response.
-    Supports both SSH and HTTP attack detection.
-    """
+    """Real-world IDS - Reads actual system logs"""
     
-    def __init__(self, threshold=5, interval=10, enable_http=True, demo_mode=True):
-        """
-        Initialize IDS with all components.
-        
-        Args:
-            threshold (int): Failed login threshold for detection
-            interval (int): Log monitoring interval in seconds
-            enable_http (bool): Enable HTTP attack detection
-            demo_mode (bool): Use demo data for demonstration
-        """
-        print("=" * 60)
-        print("  PYTHON INTRUSION DETECTION SYSTEM")
-        print("  Multi-Attack Detection Engine")
-        print("=" * 60)
-        print("\n  Initializing components...")
+    def __init__(self, threshold=5, scan_interval=30):
+        print("=" * 70)
+        print("  PRODUCTION INTRUSION DETECTION SYSTEM")
+        print("  Real SSH Brute Force Detection")
+        print("=" * 70)
         
         # Initialize components
-        self.parser = LogParser(interval=interval)
+        self.parser = LogParser()
         self.detector = Detector(threshold=threshold)
-        self.http_detector = HTTPDetector() if enable_http else None
         self.db = Database()
         self.logger = FileLogger()
         self.blocker = Blocker()
         
-        # Configuration
         self.threshold = threshold
-        self.interval = interval
-        self.enable_http = enable_http
-        self.demo_mode = demo_mode
+        self.scan_interval = scan_interval
         self.running = False
-        self.scan_count = 0
         
-        # Log system start
-        self.logger.log_system("IDS initialized")
-        self.logger.log_system(f"SSH Detection: Enabled (threshold: {threshold})")
-        if enable_http:
-            self.logger.log_system("HTTP Attack Detection: Enabled")
-        if demo_mode:
-            self.logger.log_system("Demo Mode: Enabled (using simulated attacks)")
-        self.logger.log_system(f"Monitoring interval: {interval} seconds")
+        # Log startup
+        self.logger.log_system(f"IDS started (threshold: {threshold})")
         
-        print("\n✓ All components initialized successfully!")
-        print(f"✓ SSH Brute Force Detection: Active")
-        if enable_http:
-            print(f"✓ HTTP Attack Detection: Active")
-        if demo_mode:
-            print(f"✓ Demo Mode: Active (simulated attacks)")
+        # Show what we're monitoring
+        log_source = 'journalctl' if self.parser.use_journalctl else self.parser.log_file
+        print(f"\n✓ Monitoring: {log_source}")
+        print(f"✓ Threshold: {threshold} failed attempts")
+        print(f"✓ Scan interval: {scan_interval} seconds\n")
     
     def start(self):
-        """Start the IDS monitoring process."""
+        """Start monitoring"""
         self.running = True
-        self.logger.log_system("IDS monitoring started")
-        
-        print("\n🛡️  IDS is now monitoring for threats...")
-        print(f"   Attack Types: SSH Brute Force" + (" + HTTP Attacks" if self.enable_http else ""))
-        print(f"   Checking logs every {self.interval} seconds")
-        print("   Press Ctrl+C to stop\n")
+        print("🛡️  IDS is monitoring... (Press Ctrl+C to stop)\n")
         
         try:
             while self.running:
-                self.scan_and_respond()
-                self.scan_count += 1
-                time.sleep(self.interval)
-        
+                self._scan_cycle()
+                time.sleep(self.scan_interval)
         except KeyboardInterrupt:
             self.stop()
     
-    def scan_and_respond(self):
-        """Perform one scan cycle: parse logs, detect threats, respond."""
+    def _scan_cycle(self):
+        """Single scan cycle"""
+        timestamp = time.strftime('%H:%M:%S')
         
-        # SSH Attack Detection
-        self._scan_ssh_attacks()
+        # Read NEW log entries
+        new_attempts = self.parser.scan_once()
         
-        # HTTP Attack Detection (if enabled)
-        if self.enable_http:
-            self._scan_http_attacks()
-    
-    def _scan_ssh_attacks(self):
-        """Scan for SSH brute force attacks."""
+        if not new_attempts:
+            print(f"[{timestamp}] No new failed attempts")
+            return
         
-        if self.demo_mode:
-            # Demo mode: Simulate SSH attacks periodically
-            # Show attack every 2-3 scans
-            if self.scan_count % 3 == 0:
-                # Generate demo SSH attack
-                demo_ips = [
-                    ('203.0.113.50', random.randint(6, 12)),
-                    ('45.76.123.45', random.randint(8, 15)),
-                    ('198.51.100.100', random.randint(3, 7)),
-                ]
-                
-                failed_attempts = dict(demo_ips)
-                print(f"[{time.strftime('%H:%M:%S')}] SSH: Detected brute force from {len(failed_attempts)} IP(s)")
-            else:
-                print(f"[{time.strftime('%H:%M:%S')}] SSH: No suspicious activity")
-                return
-        else:
-            # Real mode: Try to read actual logs
-            self.parser.scan_once()
-            failed_attempts = self.parser.attempts.copy()
-            
-            if not failed_attempts:
-                print(f"[{time.strftime('%H:%M:%S')}] SSH: No suspicious activity")
-                return
-            
-            print(f"[{time.strftime('%H:%M:%S')}] SSH: Found activity from {len(failed_attempts)} IP(s)")
+        print(f"[{timestamp}] ⚠️  Found failed attempts from {len(new_attempts)} IP(s)")
+        for ip, count in new_attempts.items():
+            print(f"           {ip}: {count} new attempts")
+        
+        # Get cumulative attempts for detection
+        all_attempts = self.parser.get_all_attempts()
         
         # Detect threats
-        threats = self.detector.detect_threats(failed_attempts)
+        threats = self.detector.detect_threats(all_attempts)
         
         if threats:
-            print(f"\n⚠️  SSH ATTACK DETECTED: {len(threats)} threat(s)!")
-            
-            for threat in threats:
-                ip = threat['ip']
-                attempts = threat['attempts']
-                level = threat['threat_level']
-                
-                print(f"\n   🚨 SSH Brute Force Attack:")
-                print(f"      IP Address: {ip}")
-                print(f"      Failed Attempts: {attempts}")
-                print(f"      Threat Level: {level}")
-                
-                self.logger.log_threat(ip, attempts, level)
-                threat_id = self.db.save_threat(ip, attempts, level, notes="SSH brute force")
-                print(f"      Database ID: {threat_id}")
-                
-                if level in ['HIGH', 'CRITICAL']:
-                    self._block_ip(ip, f"SSH {level} threat - {attempts} attempts")
-        else:
-            print(f"[{time.strftime('%H:%M:%S')}] SSH: Activity below threshold")
+            self._handle_threats(threats)
     
-    def _scan_http_attacks(self):
-        """Scan for HTTP-based attacks."""
-        # Simulate HTTP request monitoring
-        sample_requests = [
-            ("192.168.1.200", "GET /index.php?id=1' OR '1'='1"),
-            ("192.168.1.201", "GET /search?q=<script>alert('XSS')</script>"),
-        ]
+    def _handle_threats(self, threats):
+        """Handle detected threats"""
+        print(f"\n{'='*70}")
+        print(f"  🚨 THREAT ALERT: {len(threats)} MALICIOUS IP(S) DETECTED!")
+        print(f"{'='*70}\n")
         
-        for ip, request in sample_requests:
-            attack = self.http_detector.analyze_request(ip, request)
+        for threat in threats:
+            ip = threat['ip']
+            attempts = threat['attempts']
+            level = threat['threat_level']
             
-            if attack:
-                print(f"\n⚠️  HTTP ATTACK DETECTED!")
-                print(f"      IP Address: {attack['ip']}")
-                print(f"      Attack Types: {', '.join(attack['attack_types'])}")
-                print(f"      Threat Level: {attack['threat_level']}")
-                print(f"      Request: {attack['request'][:60]}...")
-                
-                self.logger.log_event('HTTP_ATTACK', 
-                    f"HTTP attack from {ip}: {', '.join(attack['attack_types'])}")
-                
-                threat_id = self.db.save_threat(
-                    ip, 
-                    len(attack['attack_types']), 
-                    attack['threat_level'],
-                    notes=f"HTTP: {', '.join(attack['attack_types'])}"
-                )
-                
-                if attack['threat_level'] in ['HIGH', 'CRITICAL']:
-                    self._block_ip(ip, f"HTTP attack - {', '.join(attack['attack_types'])}")
-    
-    def _block_ip(self, ip, reason):
-        """Block an IP address."""
-        print(f"      🔒 Blocking IP {ip}...")
-        
-        if self.blocker.block_ip(ip):
-            self.db.mark_as_blocked(ip)
-            self.db.save_blocked_ip(ip, reason)
-            self.logger.log_block(ip, reason)
-            print(f"      ✓ IP {ip} has been blocked")
-        else:
-            print(f"      ✗ Failed to block IP {ip}")
-            self.logger.log_error(f"Failed to block IP {ip}")
+            print(f"IP Address: {ip}")
+            print(f"  ├─ Total Attempts: {attempts}")
+            print(f"  ├─ Threat Level: {level}")
+            
+            # Save to database
+            self.db.save_threat(ip, attempts, level)
+            self.logger.log_threat(ip, attempts, level)
+            
+            # Block if HIGH or CRITICAL
+            if level in ['HIGH', 'CRITICAL']:
+                print(f"  └─ 🔒 ACTION: BLOCKING IP...")
+                if self.blocker.block_ip(ip):
+                    self.db.mark_as_blocked(ip)
+                    self.db.save_blocked_ip(ip, f"{level} threat")
+                    print(f"     ✓ Successfully blocked {ip}")
+                else:
+                    print(f"     ✗ Block failed (run with sudo for blocking)")
+            else:
+                print(f"  └─ ⚠️  Below blocking threshold")
+            
+            print()
     
     def stop(self):
-        """Stop the IDS."""
+        """Stop IDS"""
         print("\n\n🛑 Stopping IDS...")
         self.running = False
-        self.logger.log_system("IDS stopped by user")
         
-        # Show summary
-        ssh_summary = self.detector.get_threat_summary()
-        http_summary = self.http_detector.get_attack_summary() if self.enable_http else None
+        summary = self.detector.get_threat_summary()
         stats = self.db.get_statistics()
         
-        print("\n" + "=" * 60)
+        print("\n" + "=" * 70)
         print("  SESSION SUMMARY")
-        print("=" * 60)
-        print(f"  SSH Threats Detected: {ssh_summary['total']}")
-        if http_summary:
-            print(f"  HTTP Attacks Detected: {http_summary['total_attacks']}")
-        print(f"  Total IPs Blocked: {stats['total_blocked']}")
-        print(f"  Threats by Level: {dict(ssh_summary['by_level'])}")
-        print("=" * 60)
-        print("\n✓ IDS stopped successfully. Goodbye!\n")
+        print("=" * 70)
+        print(f"  Threats Detected: {summary['total']}")
+        print(f"  IPs Blocked: {stats['total_blocked']}")
+        print(f"  By Level: {dict(summary['by_level'])}")
+        print("=" * 70 + "\n")
 
 def main():
-    """Main entry point."""
+    if '--help' in sys.argv or '-h' in sys.argv:
+        print("""
+Real-World Intrusion Detection System
+
+Usage:
+    sudo python3 main.py              # Run with blocking (recommended)
+    python3 main.py                   # Run without blocking (monitor only)
+    python3 main.py --gui             # GUI mode
+    python3 main.py --threshold 10    # Custom threshold
+    python3 main.py --interval 15     # Custom scan interval
+
+Options:
+    --threshold N    Set detection threshold (default: 5)
+    --interval N     Set scan interval in seconds (default: 30)
+    --gui            Launch GUI mode
+
+Examples:
+    sudo python3 main.py --threshold 3 --interval 10
+    python3 main.py --gui
+        """)
+        return
     
-    if len(sys.argv) > 1:
-        if sys.argv[1] == '--gui':
-            print("Launching GUI mode...")
+    # Parse arguments
+    threshold = 5
+    interval = 30
+    
+    for i, arg in enumerate(sys.argv):
+        if arg == '--threshold' and i + 1 < len(sys.argv):
+            threshold = int(sys.argv[i + 1])
+        elif arg == '--interval' and i + 1 < len(sys.argv):
+            interval = int(sys.argv[i + 1])
+        elif arg == '--gui':
             from gui import run_gui
             run_gui()
             return
-        
-        elif sys.argv[1] == '--help' or sys.argv[1] == '-h':
-            print("""
-Python Intrusion Detection System (IDS)
-
-Detects and blocks:
-  • SSH Brute Force Attacks
-  • HTTP Injection Attacks (SQL, XSS, Command Injection, Path Traversal)
-
-Usage:
-    python3 main.py              # Run in CLI mode (demo mode)
-    python3 main.py --gui        # Run in GUI mode
-    python3 main.py --real       # Real mode (read actual logs)
-    python3 main.py --ssh-only   # SSH detection only
-    python3 main.py --help       # Show this help
-
-Examples:
-    python3 main.py
-    python3 main.py --gui
-    python3 main.py --real
-            """)
-            return
-        
-        elif sys.argv[1] == '--ssh-only':
-            ids = IDS(threshold=5, interval=10, enable_http=False, demo_mode=True)
-            
-            def signal_handler(sig, frame):
-                ids.stop()
-                sys.exit(0)
-            
-            signal.signal(signal.SIGINT, signal_handler)
-            ids.start()
-            return
-        
-        elif sys.argv[1] == '--real':
-            # Real mode - attempt to read actual logs
-            ids = IDS(threshold=5, interval=10, enable_http=True, demo_mode=False)
-            
-            def signal_handler(sig, frame):
-                ids.stop()
-                sys.exit(0)
-            
-            signal.signal(signal.SIGINT, signal_handler)
-            ids.start()
-            return
     
-    # Default: CLI mode with demo data
-    try:
-        ids = IDS(threshold=5, interval=10, enable_http=True, demo_mode=True)
-        
-        def signal_handler(sig, frame):
-            ids.stop()
-            sys.exit(0)
-        
-        signal.signal(signal.SIGINT, signal_handler)
-        ids.start()
+    # Start IDS
+    ids = IDS(threshold=threshold, scan_interval=interval)
     
-    except Exception as e:
-        print(f"\n❌ Error: {e}")
-        import traceback
-        traceback.print_exc()
-        sys.exit(1)
+    def signal_handler(sig, frame):
+        ids.stop()
+        sys.exit(0)
+    
+    signal.signal(signal.SIGINT, signal_handler)
+    ids.start()
 
 if __name__ == "__main__":
     main()
