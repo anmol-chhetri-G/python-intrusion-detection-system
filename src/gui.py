@@ -26,6 +26,7 @@ class IDSGUI:
         # Load initial data so it doesn't look empty on startup
         self.refresh_threats()
         self.load_logs()
+        self.update_statistics()  # IMPORTANT: update status bar stats on startup
 
     def create_widgets(self):
         """Build all the visual parts of the window"""
@@ -107,7 +108,7 @@ class IDSGUI:
 
         self.threat_tree.pack(fill="both", expand=True)
 
-        # Color rows based on threat level (makes it easier to spot bad ones)
+        # Color rows based on threat level
         self.threat_tree.tag_configure('CRITICAL', background='#e74c3c', foreground='white')
         self.threat_tree.tag_configure('HIGH',     background='#e67e22', foreground='white')
         self.threat_tree.tag_configure('MEDIUM',   background='#f39c12')
@@ -167,14 +168,30 @@ class IDSGUI:
         )
         self.stop_btn.pack(side="left", padx=5, pady=10)
 
-        tk.Button(btn_bar, text="🔄 Refresh Data", bg="#3498db", fg="white",
-                  command=self.refresh_all, **common_btn).pack(side="left", padx=5, pady=10)
+        tk.Button(
+            btn_bar, text="🔄 Refresh Data", bg="#3498db", fg="white",
+            command=self.refresh_all, **common_btn
+        ).pack(side="left", padx=5, pady=10)
 
-        tk.Button(btn_bar, text="📊 Statistics", bg="#9b59b6", fg="white",
-                  command=self.show_statistics, **common_btn).pack(side="left", padx=5, pady=10)
+        tk.Button(
+            btn_bar, text="📊 Statistics", bg="#9b59b6", fg="white",
+            command=self.show_statistics, **common_btn
+        ).pack(side="left", padx=5, pady=10)
 
-        tk.Button(btn_bar, text="🗑️ Clear Logs", bg="#95a5a6", fg="white",
-                  command=self.clear_logs, **common_btn).pack(side="left", padx=5, pady=10)
+        tk.Button(
+            btn_bar, text="🗑️ Clear Logs", bg="#95a5a6", fg="white",
+            command=self.clear_logs, **common_btn
+        ).pack(side="left", padx=5, pady=10)
+
+        # ✅ Unblock button (correct placement + uses your existing style dict)
+        tk.Button(
+            btn_bar,
+            text="🔓 Unblock IP",
+            bg="#f39c12",
+            fg="white",
+            command=self.unblock_selected,
+            **common_btn
+        ).pack(side="left", padx=5, pady=10)
 
     def refresh_threats(self):
         """Pull latest threats from database and show them in the table"""
@@ -206,7 +223,7 @@ class IDSGUI:
         for line in lines:
             self.log_display.insert(tk.END, line)
 
-        self.log_display.see(tk.END)  # scroll to bottom
+        self.log_display.see(tk.END)
 
     def refresh_all(self):
         """Quick refresh everything button"""
@@ -271,6 +288,27 @@ Last updated: {datetime.now():%Y-%m-%d %H:%M:%S}
         if messagebox.askyesno("Clear Logs", "Really clear the log view?"):
             self.log_display.delete(1.0, tk.END)
             self.logger.log_system("Log display was cleared")
+
+    def unblock_selected(self):
+        """Unblock selected IP from threat table"""
+        from blocker import Blocker
+
+        selected = self.threat_tree.selection()
+        if not selected:
+            messagebox.showwarning("No Selection", "Please select an IP to unblock")
+            return
+
+        item = self.threat_tree.item(selected[0])
+        ip = item["values"][0]  # IP Address column
+
+        if messagebox.askyesno("Unblock IP", f"Unblock {ip}?"):
+            blocker = Blocker()
+            if blocker.unblock_ip(ip):
+                self.logger.log_system(f"IP unblocked via GUI: {ip}")
+                self.refresh_all()
+                messagebox.showinfo("Success", f"Unblocked {ip}")
+            else:
+                messagebox.showerror("Error", f"Failed to unblock {ip}\nMay need sudo")
 
 
 def run_gui():
